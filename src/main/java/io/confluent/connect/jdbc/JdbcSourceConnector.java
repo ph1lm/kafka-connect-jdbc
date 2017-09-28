@@ -75,7 +75,15 @@ public class JdbcSourceConnector extends SourceConnector {
     final String dbUrl = config.getString(JdbcSourceConnectorConfig.CONNECTION_URL_CONFIG);
     final String dbUser = config.getString(JdbcSourceConnectorConfig.CONNECTION_USER_CONFIG);
     final Password dbPassword = config.getPassword(JdbcSourceConnectorConfig.CONNECTION_PASSWORD_CONFIG);
-    cachedConnectionProvider = new CachedConnectionProvider(dbUrl, dbUser, dbPassword == null ? null : dbPassword.value());
+    if (config.values().containsKey(JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_CONFIG)
+        && config.values().containsKey(JdbcSourceConnectorConfig.CONNECTION_BACKOFF_CONFIG)) {
+      final Integer connectionAttempts = config.getInt(JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_CONFIG);
+      final Long connectionBackoff = config.getLong(JdbcSourceConnectorConfig.CONNECTION_BACKOFF_CONFIG);
+      cachedConnectionProvider = new CachedConnectionProvider(dbUrl, dbUser, dbPassword == null ? null : dbPassword.value(),
+          connectionAttempts, connectionBackoff);
+    } else {
+      cachedConnectionProvider = new CachedConnectionProvider(dbUrl, dbUser, dbPassword == null ? null : dbPassword.value());
+    }
 
     // Initial connection attempt
     cachedConnectionProvider.getValidConnection();
