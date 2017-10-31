@@ -196,6 +196,11 @@ public class JdbcSourceTask extends SourceTask {
   public List<SourceRecord> poll() throws InterruptedException {
     log.trace("{} Polling for new data");
 
+    final int maxConnectionAttempts = config.values().containsKey(JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_CONFIG)
+        ? config.getInt(JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_CONFIG)
+        : JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_DEFAULT;
+    int attempts = 0;
+
     while (!stop.get()) {
       final TableQuerier querier = tableQueue.peek();
 
@@ -233,10 +238,17 @@ public class JdbcSourceTask extends SourceTask {
 
         log.debug("Returning {} records for {}", results.size(), querier.toString());
         return results;
-      } catch (SQLException e) {
-        log.error("Failed to run query for table {}: {}", querier.toString(), e);
+      } catch (SQLException | ConnectException e) {
         resetAndRequeueHead(querier);
-        return null;
+        attempts++;
+        if (attempts < maxConnectionAttempts) {
+          log.warn("No worries, we failed but we'll retry {} more time to re-run query for table {}: {}",
+              maxConnectionAttempts - attempts, querier.toString(), e);
+          // there may be duplicates here but we don't worry about it 'cause we handle them on consumer side.
+        } else {
+          log.error("Failed to run query for table {}: {}", querier.toString(), e);
+          return null;
+        }
       }
     }
 

@@ -27,7 +27,6 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +78,37 @@ public class JdbcSourceTaskLifecycleTest extends JdbcSourceTaskTestBase {
     task.start(singleTableConfig());
     task.stop();
 
+    PowerMock.verifyAll();
+  }
+
+  @Test
+  public void testPollRetry() throws Exception {
+    CachedConnectionProvider mockCachedConnectionProvider = PowerMock.createMock(CachedConnectionProvider.class);
+    PowerMock.expectNew(CachedConnectionProvider.class, db.getUrl(), null, null,
+        JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_DEFAULT, JdbcSourceConnectorConfig.CONNECTION_BACKOFF_DEFAULT)
+        .andReturn(mockCachedConnectionProvider);
+
+    Connection connection = this.db.getConnection();
+    EasyMock.expect(mockCachedConnectionProvider.getValidConnection())
+        .andReturn(connection)
+        .andThrow(new ConnectException("test retry 1"))
+        .andThrow(new ConnectException("test retry 2"))
+        .andReturn(connection);
+
+    mockCachedConnectionProvider.closeQuietly();
+    PowerMock.expectLastCall();
+
+    PowerMock.replayAll();
+
+    db.createTable(SINGLE_TABLE_NAME, "id", "INT");
+    db.insert(SINGLE_TABLE_NAME, "id", 1);
+
+    task.start(singleTableConfig());
+
+    List<SourceRecord> records = task.poll();
+    assertEquals(1, records.size());
+
+    task.stop();
     PowerMock.verifyAll();
   }
 

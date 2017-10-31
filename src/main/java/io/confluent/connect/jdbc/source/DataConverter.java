@@ -64,14 +64,15 @@ public class DataConverter {
         convertFieldValue(resultSet, col, metadata.getColumnType(col), struct,
                           metadata.getColumnLabel(col), mapNumerics);
       } catch (IOException e) {
-        log.warn("Ignoring record because processing failed:", e);
+        log.warn("Processing failed:", e);
+        throw new SQLException(e);
       } catch (SQLException e) {
-        log.warn("Ignoring record due to SQL error:", e);
+        log.warn("SQL error:", e);
+        throw e;
       }
     }
     return struct;
   }
-
 
   private static void addFieldSchema(ResultSetMetaData metadata, int col,
                                      SchemaBuilder builder, boolean mapNumerics)
