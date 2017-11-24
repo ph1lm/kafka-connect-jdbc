@@ -216,7 +216,7 @@ public class JdbcSourceTask extends SourceTask {
             nextUpdate, untilNext);
 
         if (untilNext > 0) {
-          log.trace("Waiting {} ms to poll {} next", untilNext, querier.toString());
+          log.debug("Waiting {} ms to poll {} next", untilNext, querier.toString());
           time.sleep(untilNext);
           continue; // Re-check stop flag before continuing
         }
@@ -236,7 +236,7 @@ public class JdbcSourceTask extends SourceTask {
           results.add(querier.extractRecord());
         }
 
-        log.trace("May be reset ? results: {}, hadNext: {} : {}", results.size(), hadNext, querier.toString());
+        log.debug("May be reset ? results: {}, hadNext: {} : {}", results.size(), hadNext, querier.toString());
 
         if (!hadNext) {
           // If we finished processing the results from the current query, we can reset and send the querier to the tail of the queue
@@ -244,11 +244,11 @@ public class JdbcSourceTask extends SourceTask {
         }
 
         if (results.isEmpty()) {
-          log.trace("No updates for {}", querier.toString());
+          log.debug("No updates for {}", querier.toString());
           continue;
         }
 
-        log.debug("Returning {} records for {}", results.size(), querier.toString());
+        log.info("Returning {} records for {}", results.size(), querier.toString());
         return results;
       } catch (SQLException | ConnectException e) {
         resetAndRequeueHead(querier);
