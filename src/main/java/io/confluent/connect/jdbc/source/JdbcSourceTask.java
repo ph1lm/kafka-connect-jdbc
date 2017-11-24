@@ -204,10 +204,17 @@ public class JdbcSourceTask extends SourceTask {
     while (!stop.get()) {
       final TableQuerier querier = tableQueue.peek();
 
+      log.debug("Is {} querying? {}", querier, querier.querying());
       if (!querier.querying()) {
         // If not in the middle of an update, wait for next update time
-        final long nextUpdate = querier.getLastUpdate() + config.getInt(JdbcSourceTaskConfig.POLL_INTERVAL_MS_CONFIG);
+        Integer pollInterval = config.getInt(JdbcSourceTaskConfig.POLL_INTERVAL_MS_CONFIG);
+        long lastUpdate = querier.getLastUpdate();
+        final long nextUpdate = lastUpdate + pollInterval;
         final long untilNext = nextUpdate - time.milliseconds();
+
+        log.debug("pollInterval: {}, lastUpdate: {}, nextUpdate: {}, untilNext: {}", pollInterval, lastUpdate,
+            nextUpdate, untilNext);
+
         if (untilNext > 0) {
           log.trace("Waiting {} ms to poll {} next", untilNext, querier.toString());
           time.sleep(untilNext);
@@ -221,10 +228,15 @@ public class JdbcSourceTask extends SourceTask {
         querier.maybeStartQuery(cachedConnectionProvider.getValidConnection());
 
         int batchMaxRows = config.getInt(JdbcSourceTaskConfig.BATCH_MAX_ROWS_CONFIG);
+
+        log.debug("batchMaxRows: {}", batchMaxRows);
+
         boolean hadNext = true;
         while (results.size() < batchMaxRows && (hadNext = querier.next())) {
           results.add(querier.extractRecord());
         }
+
+        log.trace("May be reset ? results: {}, hadNext: {} : {}", results.size(), hadNext, querier.toString());
 
         if (!hadNext) {
           // If we finished processing the results from the current query, we can reset and send the querier to the tail of the queue

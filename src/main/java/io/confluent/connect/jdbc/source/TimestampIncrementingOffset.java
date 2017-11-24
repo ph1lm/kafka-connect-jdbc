@@ -101,4 +101,12 @@ public class TimestampIncrementingOffset {
     result = 31 * result + (timestampOffset != null ? timestampOffset.hashCode() : 0);
     return result;
   }
+
+  @Override
+  public String toString() {
+    return "TimestampIncrementingOffset{" +
+        "incrementingOffset=" + incrementingOffset +
+        ", timestampOffset=" + timestampOffset +
+        '}';
+  }
 }
