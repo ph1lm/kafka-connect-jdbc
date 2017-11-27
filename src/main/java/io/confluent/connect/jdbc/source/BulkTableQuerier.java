@@ -40,8 +40,8 @@ public class BulkTableQuerier extends TableQuerier {
   private final String keyColumn;
 
   public BulkTableQuerier(QueryMode mode, String name, String fullname, String schemaPattern,
-                          String topicPrefix, String keyColumn, boolean mapNumerics) {
-    super(mode, name, fullname, topicPrefix, schemaPattern, mapNumerics);
+      String topicPrefix, String keyColumn, boolean mapNumerics, int fetchSize) {
+    super(mode, name, fullname, topicPrefix, schemaPattern, mapNumerics, fetchSize);
     this.keyColumn = keyColumn;
   }
 

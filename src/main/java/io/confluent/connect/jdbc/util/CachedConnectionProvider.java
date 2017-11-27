@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.concurrent.Executors;
 
 public class CachedConnectionProvider {
 
@@ -36,6 +37,7 @@ public class CachedConnectionProvider {
   private final String password;
   private final int maxConnectionAttempts;
   private final long connectionRetryBackoff;
+  private final Integer networkTimeout;
 
   private Connection connection;
 
@@ -45,7 +47,7 @@ public class CachedConnectionProvider {
 
   public CachedConnectionProvider(String url, String username, String password) {
     this(url, username, password, JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_DEFAULT,
-        JdbcSourceConnectorConfig.CONNECTION_BACKOFF_DEFAULT);
+        JdbcSourceConnectorConfig.CONNECTION_BACKOFF_DEFAULT, JdbcSourceConnectorConfig.CONNECTION_NETWORK_TIMEOUT_DEFAULT);
   }
 
   public CachedConnectionProvider(
@@ -53,13 +55,15 @@ public class CachedConnectionProvider {
       String username,
       String password,
       int maxConnectionAttempts,
-      long connectionRetryBackoff
+      long connectionRetryBackoff,
+      int networkTimeout
   ) {
     this.url = url;
     this.username = username;
     this.password = password;
     this.maxConnectionAttempts = maxConnectionAttempts;
     this.connectionRetryBackoff = connectionRetryBackoff;
+    this.networkTimeout = networkTimeout;
   }
 
   public synchronized Connection getValidConnection() {
@@ -81,7 +85,7 @@ public class CachedConnectionProvider {
     int attempts = 0;
     while (attempts < maxConnectionAttempts) {
       try {
-        log.debug("Attempting to connect to {}", url);
+        log.info("Attempting to connect to {}", url);
         connection = DriverManager.getConnection(url, username, password);
         onConnect(connection);
         return;
@@ -115,6 +119,11 @@ public class CachedConnectionProvider {
   }
 
   protected void onConnect(Connection connection) throws SQLException {
+    try {
+      connection.setNetworkTimeout(Executors.newFixedThreadPool(2), networkTimeout);
+    } catch (Exception e) {
+      log.warn("Failed to set Network Timeout, {}", e.getMessage());
+    }
   }
 
 }
