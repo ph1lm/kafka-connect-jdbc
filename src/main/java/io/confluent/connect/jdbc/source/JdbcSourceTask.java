@@ -78,15 +78,13 @@ public class JdbcSourceTask extends SourceTask {
     final String dbUrl = config.getString(JdbcSourceConnectorConfig.CONNECTION_URL_CONFIG);
     final String dbUser = config.getString(JdbcSourceConnectorConfig.CONNECTION_USER_CONFIG);
     final Password dbPassword = config.getPassword(JdbcSourceConnectorConfig.CONNECTION_PASSWORD_CONFIG);
-    if (config.values().containsKey(JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_CONFIG)
-        && config.values().containsKey(JdbcSourceConnectorConfig.CONNECTION_BACKOFF_CONFIG)) {
-      final Integer connectionAttempts = config.getInt(JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_CONFIG);
-      final Long connectionBackoff = config.getLong(JdbcSourceConnectorConfig.CONNECTION_BACKOFF_CONFIG);
-      cachedConnectionProvider = new CachedConnectionProvider(dbUrl, dbUser, dbPassword == null ? null : dbPassword.value(),
-          connectionAttempts, connectionBackoff);
-    } else {
-      cachedConnectionProvider = new CachedConnectionProvider(dbUrl, dbUser, dbPassword == null ? null : dbPassword.value());
-    }
+    final Integer connectionAttempts = config.getInt(JdbcSourceConnectorConfig.CONNECTION_ATTEMPTS_CONFIG);
+    final Long connectionBackoff = config.getLong(JdbcSourceConnectorConfig.CONNECTION_BACKOFF_CONFIG);
+    final int networkTimeout = config.getInt(JdbcSourceConnectorConfig.CONNECTION_NETWORK_TIMEOUT_CONFIG);
+
+    cachedConnectionProvider = new CachedConnectionProvider(dbUrl, dbUser, dbPassword == null ? null : dbPassword.value(),
+        connectionAttempts, connectionBackoff, networkTimeout);
+
 
     List<String> tables = config.getList(JdbcSourceTaskConfig.TABLES_CONFIG);
     String query = config.getString(JdbcSourceTaskConfig.QUERY_CONFIG);
@@ -160,22 +158,23 @@ public class JdbcSourceTask extends SourceTask {
 
       String topicPrefix = config.getString(JdbcSourceTaskConfig.TOPIC_PREFIX_CONFIG);
       boolean mapNumerics = config.getBoolean(JdbcSourceTaskConfig.NUMERIC_PRECISION_MAPPING_CONFIG);
+      int fetchSize = config.getInt(JdbcSourceTaskConfig.CONNECTION_FECTH_SIZE_CONFIG);
 
       if (mode.equals(JdbcSourceTaskConfig.MODE_BULK)) {
         tableQueue.add(new BulkTableQuerier(queryMode, tableOrQuery, name, schemaPattern,
-                topicPrefix, keyColumn, mapNumerics));
+                topicPrefix, keyColumn, mapNumerics, fetchSize));
       } else if (mode.equals(JdbcSourceTaskConfig.MODE_INCREMENTING)) {
         tableQueue.add(new TimestampIncrementingTableQuerier(
             queryMode, tableOrQuery, name, topicPrefix, null, incrementingColumn, keyColumn, offset,
-                timestampDelayInterval, schemaPattern, mapNumerics));
+                timestampDelayInterval, schemaPattern, mapNumerics, fetchSize));
       } else if (mode.equals(JdbcSourceTaskConfig.MODE_TIMESTAMP)) {
         tableQueue.add(new TimestampIncrementingTableQuerier(
             queryMode, tableOrQuery, name, topicPrefix, timestampColumn, null, keyColumn, offset,
-                timestampDelayInterval, schemaPattern, mapNumerics));
+                timestampDelayInterval, schemaPattern, mapNumerics, fetchSize));
       } else if (mode.endsWith(JdbcSourceTaskConfig.MODE_TIMESTAMP_INCREMENTING)) {
         tableQueue.add(new TimestampIncrementingTableQuerier(
             queryMode, tableOrQuery, name, topicPrefix, timestampColumn, incrementingColumn, keyColumn,
-                offset, timestampDelayInterval, schemaPattern, mapNumerics));
+                offset, timestampDelayInterval, schemaPattern, mapNumerics, fetchSize));
       }
     }
 

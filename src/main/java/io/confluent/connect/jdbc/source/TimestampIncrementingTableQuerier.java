@@ -64,10 +64,10 @@ public class TimestampIncrementingTableQuerier extends TableQuerier {
   private TimestampIncrementingOffset offset;
 
   public TimestampIncrementingTableQuerier(QueryMode mode, String name, String fullname, String topicPrefix,
-                                           String timestampColumn, String incrementingColumn, String keyColumn,
-                                           Map<String, Object> offsetMap, Long timestampDelay,
-                                           String schemaPattern, boolean mapNumerics) {
-    super(mode, name, fullname, topicPrefix, schemaPattern, mapNumerics);
+      String timestampColumn, String incrementingColumn, String keyColumn,
+      Map<String, Object> offsetMap, Long timestampDelay,
+      String schemaPattern, boolean mapNumerics, int fetchSize) {
+    super(mode, name, fullname, topicPrefix, schemaPattern, mapNumerics, fetchSize);
     this.timestampColumn = timestampColumn;
     this.incrementingColumn = incrementingColumn;
     this.keyColumn = keyColumn;
