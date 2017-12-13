@@ -249,8 +249,12 @@ public class JdbcSourceTask extends SourceTask {
 
         log.info("Returning {} records for {}", results.size(), querier.toString());
         return results;
-      } catch (SQLException | ConnectException e) {
+      } catch (Exception e) {
         resetAndRequeueHead(querier);
+        log.warn("No worries, we've got exception, skipping further processing and we'll reset connection on next poll.", e);
+        if (!results.isEmpty()) {
+          return results;
+        }
         attempts++;
         if (attempts < maxConnectionAttempts) {
           log.warn("No worries, we failed but we'll retry {} more time to re-run query for table {}: {}",
