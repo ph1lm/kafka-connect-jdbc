@@ -242,7 +242,7 @@ public class JdbcSourceTaskUpdateTest extends JdbcSourceTaskTestBase {
 
   @Test
   public void testManualIncrementingRestoreOffset() throws Exception {
-    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(null, 1L);
+    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(null, 1L, null);
     expectInitialize(Arrays.asList(SINGLE_TABLE_PARTITION),
             Collections.singletonMap(SINGLE_TABLE_PARTITION, offset.toMap()));
 
@@ -263,8 +263,75 @@ public class JdbcSourceTaskUpdateTest extends JdbcSourceTaskTestBase {
   }
 
   @Test
+  public void testManualIncrementingRestoreOffsetAndIdFieldNotFound() throws Exception {
+    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(null, 1L, null);
+    expectInitialize(Arrays.asList(SINGLE_TABLE_PARTITION),
+            Collections.singletonMap(SINGLE_TABLE_PARTITION, offset.toMap()));
+
+    PowerMock.replayAll();
+
+    db.createTable(SINGLE_TABLE_NAME,
+            "id", "INT NOT NULL");
+    db.insert(SINGLE_TABLE_NAME, "id", 1);
+    db.insert(SINGLE_TABLE_NAME, "id", 2);
+    db.insert(SINGLE_TABLE_NAME, "id", 3);
+
+    startTask(null, "id", "key",  null, null);
+
+    // Effectively skips first poll
+    verifyPoll(2, "id", Arrays.asList(2, 3), false, true, TOPIC_PREFIX + SINGLE_TABLE_NAME);
+
+    PowerMock.verifyAll();
+  }
+
+  @Test
+  public void testManualIncrementingRestoreOffsetAndIdNull() throws Exception {
+    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(null, 1L, null);
+    expectInitialize(Arrays.asList(SINGLE_TABLE_PARTITION),
+            Collections.singletonMap(SINGLE_TABLE_PARTITION, offset.toMap()));
+
+    PowerMock.replayAll();
+
+    db.createTable(SINGLE_TABLE_NAME,
+            "id", "INT NOT NULL", "key", "INT");
+    db.insert(SINGLE_TABLE_NAME, "id", 1, "key", 0);
+    db.insert(SINGLE_TABLE_NAME, "id", 2, "key", 0);
+    db.insert(SINGLE_TABLE_NAME, "id", 3, "key", 0);
+
+    startTask(null, "id", "key",  null, null);
+
+    // Effectively skips first poll
+    verifyPoll(3, "id", Arrays.asList(1, 2, 3), false, true, TOPIC_PREFIX + SINGLE_TABLE_NAME);
+
+    PowerMock.verifyAll();
+  }
+
+  @Test
+  public void testManualIncrementingRestoreOffsetAndId() throws Exception {
+    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(null, 1L, 1L);
+    expectInitialize(Arrays.asList(SINGLE_TABLE_PARTITION),
+            Collections.singletonMap(SINGLE_TABLE_PARTITION, offset.toMap()));
+
+    PowerMock.replayAll();
+
+    db.createTable(SINGLE_TABLE_NAME,
+            "id", "INT NOT NULL", "key", "INT");
+    db.insert(SINGLE_TABLE_NAME, "id", 1, "key", 1);
+    db.insert(SINGLE_TABLE_NAME, "id", 1, "key", 2);
+    db.insert(SINGLE_TABLE_NAME, "id", 2, "key", 0);
+    db.insert(SINGLE_TABLE_NAME, "id", 3, "key", 0);
+
+    startTask(null, "id", "key",  null, null);
+
+    // Effectively skips first poll
+    verifyPoll(3, "id", Arrays.asList(1, 2, 3), false, true, TOPIC_PREFIX + SINGLE_TABLE_NAME);
+
+    PowerMock.verifyAll();
+  }
+
+  @Test
   public void testAutoincrementRestoreOffset() throws Exception {
-    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(null, 1L);
+    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(null, 1L, null);
     expectInitialize(Arrays.asList(SINGLE_TABLE_PARTITION),
             Collections.singletonMap(SINGLE_TABLE_PARTITION, offset.toMap()));
 
@@ -289,7 +356,7 @@ public class JdbcSourceTaskUpdateTest extends JdbcSourceTaskTestBase {
 
   @Test
   public void testTimestampRestoreOffset() throws Exception {
-    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(new Timestamp(10L), null);
+    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(new Timestamp(10L), null, null);
     expectInitialize(Arrays.asList(SINGLE_TABLE_PARTITION),
             Collections.singletonMap(SINGLE_TABLE_PARTITION, offset.toMap()));
 
@@ -314,7 +381,7 @@ public class JdbcSourceTaskUpdateTest extends JdbcSourceTaskTestBase {
 
   @Test
   public void testTimestampAndIncrementingRestoreOffset() throws Exception {
-    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(new Timestamp(10L), 3L);
+    TimestampIncrementingOffset offset = new TimestampIncrementingOffset(new Timestamp(10L), 3L, null);
     expectInitialize(Arrays.asList(SINGLE_TABLE_PARTITION),
             Collections.singletonMap(SINGLE_TABLE_PARTITION, offset.toMap()));
 
@@ -418,6 +485,10 @@ public class JdbcSourceTaskUpdateTest extends JdbcSourceTaskTestBase {
   }
 
   private void startTask(String timestampColumn, String incrementingColumn, String query, Long delay) {
+    startTask(timestampColumn, incrementingColumn, "", query, delay);
+  }
+
+  private void startTask(String timestampColumn, String incrementingColumn, String incrementingKeyColumn, String query, Long delay) {
     String mode = null;
     if (timestampColumn != null && incrementingColumn != null) {
       mode = JdbcSourceConnectorConfig.MODE_TIMESTAMP_INCREMENTING;
@@ -440,6 +511,9 @@ public class JdbcSourceTaskUpdateTest extends JdbcSourceTaskTestBase {
     }
     if (incrementingColumn != null) {
       taskConfig.put(JdbcSourceConnectorConfig.INCREMENTING_COLUMN_NAME_CONFIG, incrementingColumn);
+    }
+    if (incrementingKeyColumn != null) {
+      taskConfig.put(JdbcSourceConnectorConfig.KEY_COLUMN_NAME_CONFIG, incrementingKeyColumn);
     }
     taskConfig.put(JdbcSourceConnectorConfig.TIMESTAMP_DELAY_INTERVAL_MS_CONFIG, delay == null ? "0" : delay.toString());
     task.start(taskConfig);
