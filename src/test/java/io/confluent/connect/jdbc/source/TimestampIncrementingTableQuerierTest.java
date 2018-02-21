@@ -33,24 +33,32 @@ public class TimestampIncrementingTableQuerierTest {
 
   @Test
   public void extractIntOffset() throws SQLException {
-    final Schema schema = SchemaBuilder.struct().field("id", SchemaBuilder.INT32_SCHEMA).build();
-    final Struct record = new Struct(schema).put("id", 42);
-    assertEquals(42L, newQuerier().extractOffset(schema, record).getIncrementingOffset());
+    final Schema schema = SchemaBuilder.struct().field("id", SchemaBuilder.INT32_SCHEMA)
+            .field("key", SchemaBuilder.INT32_SCHEMA).build();
+    final Struct record = new Struct(schema).put("id", 42).put("key", 33);
+    TimestampIncrementingOffset timestampIncrementingOffset = newQuerier().extractOffset(schema, record);
+    assertEquals(42L, timestampIncrementingOffset.getIncrementingOffset());
+    assertEquals(33L, timestampIncrementingOffset.getIncrementingKey());
   }
 
   @Test
   public void extractLongOffset() throws SQLException {
-    final Schema schema = SchemaBuilder.struct().field("id", SchemaBuilder.INT64_SCHEMA).build();
-    final Struct record = new Struct(schema).put("id", 42L);
-    assertEquals(42L, newQuerier().extractOffset(schema, record).getIncrementingOffset());
+    final Schema schema = SchemaBuilder.struct().field("id", SchemaBuilder.INT64_SCHEMA)
+            .field("key", SchemaBuilder.INT64_SCHEMA).build();
+    final Struct record = new Struct(schema).put("id", 42L).put("key", 33L);
+    TimestampIncrementingOffset timestampIncrementingOffset = newQuerier().extractOffset(schema, record);
+    assertEquals(42L, timestampIncrementingOffset.getIncrementingOffset());
+    assertEquals(33L, timestampIncrementingOffset.getIncrementingKey());
   }
 
   @Test
   public void extractDecimalOffset() throws SQLException {
     final Schema decimalSchema = Decimal.schema(0);
-    final Schema schema = SchemaBuilder.struct().field("id", decimalSchema).build();
-    final Struct record = new Struct(schema).put("id", new BigDecimal(42));
-    assertEquals(42L, newQuerier().extractOffset(schema, record).getIncrementingOffset());
+    final Schema schema = SchemaBuilder.struct().field("id", decimalSchema).field("key", decimalSchema).build();
+    final Struct record = new Struct(schema).put("id", new BigDecimal(42)).put("key", new BigDecimal(33L));
+    TimestampIncrementingOffset timestampIncrementingOffset = newQuerier().extractOffset(schema, record);
+    assertEquals(42L, timestampIncrementingOffset.getIncrementingOffset());
+    assertEquals(33L, timestampIncrementingOffset.getIncrementingKey());
   }
 
   @Test(expected = ConnectException.class)
@@ -70,7 +78,7 @@ public class TimestampIncrementingTableQuerierTest {
   }
 
   private TimestampIncrementingTableQuerier newQuerier() {
-    return new TimestampIncrementingTableQuerier(TableQuerier.QueryMode.TABLE, null, "", "", null, "id", null, Collections.<String, Object>emptyMap(), 0L, null, false,
+    return new TimestampIncrementingTableQuerier(TableQuerier.QueryMode.TABLE, null, "", "", null, "id", "key", Collections.<String, Object>emptyMap(), 0L, null, false,
         0);
   }
 

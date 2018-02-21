@@ -22,25 +22,34 @@ import java.util.Map;
 
 public class TimestampIncrementingOffset {
   private static final String INCREMENTING_FIELD = "incrementing";
+  private static final String INCREMENTING_ID_FIELD = "incrementing_id";
   private static final String TIMESTAMP_FIELD = "timestamp";
   private static final String TIMESTAMP_NANOS_FIELD = "timestamp_nanos";
 
   private final Long incrementingOffset;
   private final Timestamp timestampOffset;
+  private final Long incrementingKey;
 
   /**
    * @param timestampOffset the timestamp offset.
    *                        If null, {@link #getTimestampOffset()} will return {@code new Timestamp(0)}.
    * @param incrementingOffset the incrementing offset.
    *                           If null, {@link #getIncrementingOffset()} will return -1.
+   * @param incrementingId     the incrementing id.
+   *                           If null, {@link #getIncrementingKey()} will return -1.
    */
-  public TimestampIncrementingOffset(Timestamp timestampOffset, Long incrementingOffset) {
+  public TimestampIncrementingOffset(Timestamp timestampOffset, Long incrementingOffset, Long incrementingId) {
     this.timestampOffset = timestampOffset;
     this.incrementingOffset = incrementingOffset;
+    this.incrementingKey = incrementingId;
   }
 
   public long getIncrementingOffset() {
     return incrementingOffset == null ? -1 : incrementingOffset;
+  }
+
+  public long getIncrementingKey() {
+    return incrementingKey == null ? -1 : incrementingKey;
   }
 
   public Timestamp getTimestampOffset() {
@@ -48,9 +57,12 @@ public class TimestampIncrementingOffset {
   }
 
   public Map<String, Object> toMap() {
-    Map<String, Object> map = new HashMap<>(3);
+    Map<String, Object> map = new HashMap<>(4);
     if (incrementingOffset != null) {
       map.put(INCREMENTING_FIELD, incrementingOffset);
+    }
+    if (incrementingKey != null) {
+      map.put(INCREMENTING_ID_FIELD, incrementingKey);
     }
     if (timestampOffset != null) {
       map.put(TIMESTAMP_FIELD, timestampOffset.getTime());
@@ -61,10 +73,15 @@ public class TimestampIncrementingOffset {
 
   public static TimestampIncrementingOffset fromMap(Map<String, ?> map) {
     if (map == null || map.isEmpty()) {
-      return new TimestampIncrementingOffset(null, null);
+      return new TimestampIncrementingOffset(null, null, null);
     }
 
     Long incr = (Long) map.get(INCREMENTING_FIELD);
+    Object tmpId = map.get(INCREMENTING_ID_FIELD);
+    Long id = null;
+    if (tmpId != null) {
+      id = (Long) tmpId;
+    }
     Long millis = (Long) map.get(TIMESTAMP_FIELD);
     Timestamp ts = null;
     if (millis != null) {
@@ -74,7 +91,7 @@ public class TimestampIncrementingOffset {
         ts.setNanos(nanos.intValue());
       }
     }
-    return new TimestampIncrementingOffset(ts, incr);
+    return new TimestampIncrementingOffset(ts, incr, id);
   }
 
   @Override
@@ -91,6 +108,11 @@ public class TimestampIncrementingOffset {
     if (incrementingOffset != null ? !incrementingOffset.equals(that.incrementingOffset) : that.incrementingOffset != null) {
       return false;
     }
+
+    if (incrementingKey != null ? !incrementingKey.equals(that.incrementingKey) : that.incrementingKey != null) {
+      return false;
+    }
+
     return timestampOffset != null ? timestampOffset.equals(that.timestampOffset) : that.timestampOffset == null;
 
   }
@@ -106,6 +128,7 @@ public class TimestampIncrementingOffset {
   public String toString() {
     return "TimestampIncrementingOffset{" +
         "incrementingOffset=" + incrementingOffset +
+        "incrementingId=" + incrementingKey +
         ", timestampOffset=" + timestampOffset +
         '}';
   }

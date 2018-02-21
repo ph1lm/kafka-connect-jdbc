@@ -17,6 +17,7 @@
 package io.confluent.connect.jdbc.source;
 
 import org.apache.kafka.connect.data.Decimal;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -82,6 +83,10 @@ public class TimestampIncrementingTableQuerier extends TableQuerier {
       incrementingColumn = JdbcUtils.getAutoincrementColumn(db, schemaPattern, name);
     }
 
+    if (keyColumn != null && !keyColumn.isEmpty() && !JdbcUtils.checkIsFieldExist(db, schemaPattern, name, keyColumn)) {
+      keyColumn = null;
+    }
+
     String quoteString = JdbcUtils.getIdentifierQuoteString(db);
 
     StringBuilder builder = new StringBuilder();
@@ -127,6 +132,19 @@ public class TimestampIncrementingTableQuerier extends TableQuerier {
       builder.append(",");
       builder.append(JdbcUtils.quoteString(incrementingColumn, quoteString));
       builder.append(" ASC");
+    } else if (incrementingColumn != null && keyColumn != null && !keyColumn.isEmpty()) {
+      builder.append(" WHERE ( ");
+      builder.append(JdbcUtils.quoteString(incrementingColumn, quoteString));
+      builder.append(" = ? AND ");
+      builder.append(JdbcUtils.quoteString(keyColumn, quoteString));
+      builder.append(" > ? ) OR ");
+      builder.append(JdbcUtils.quoteString(incrementingColumn, quoteString));
+      builder.append(" > ? ");
+      builder.append(" ORDER BY ");
+      builder.append(JdbcUtils.quoteString(incrementingColumn, quoteString));
+      builder.append(",");
+      builder.append(JdbcUtils.quoteString(keyColumn, quoteString));
+      builder.append(" ASC");
     } else if (incrementingColumn != null) {
       builder.append(" WHERE ");
       builder.append(JdbcUtils.quoteString(incrementingColumn, quoteString));
@@ -162,6 +180,13 @@ public class TimestampIncrementingTableQuerier extends TableQuerier {
                 DateTimeUtils.formatUtcTimestamp(tsOffset),
                 DateTimeUtils.formatUtcTimestamp(endTime),
                 incOffset);
+    } else if (incrementingColumn != null && keyColumn != null && !keyColumn.isEmpty()) {
+      Long incOffset = offset.getIncrementingOffset();
+      Long incKey = offset.getIncrementingKey();
+      stmt.setLong(1, incOffset);
+      stmt.setLong(2, incKey);
+      stmt.setLong(3, incOffset);
+      log.debug("Executing prepared statement for {} with incrementing value = {} key= {}", name, incOffset, incKey);
     } else if (incrementingColumn != null) {
       Long incOffset = offset.getIncrementingOffset();
       stmt.setLong(1, incOffset);
@@ -220,35 +245,95 @@ public class TimestampIncrementingTableQuerier extends TableQuerier {
     }
 
     final Long extractedId;
+    Long extractedKey = null;
     if (incrementingColumn != null) {
-      final Schema incrementingColumnSchema = schema.field(incrementingColumn).schema();
-      final Object incrementingColumnValue = record.get(incrementingColumn);
-      if (incrementingColumnValue == null) {
-        throw new ConnectException("Null value for incrementing column of type: " + incrementingColumnSchema.type());
-      } else if (isIntegralPrimitiveType(incrementingColumnValue)) {
-        extractedId = ((Number) incrementingColumnValue).longValue();
-      } else if (incrementingColumnSchema.name() != null && incrementingColumnSchema.name().equals(Decimal.LOGICAL_NAME)) {
-        final BigDecimal decimal = ((BigDecimal) incrementingColumnValue);
-        if (decimal.compareTo(LONG_MAX_VALUE_AS_BIGDEC) > 0) {
-          throw new ConnectException("Decimal value for incrementing column exceeded Long.MAX_VALUE");
-        }
-        if (decimal.scale() != 0) {
-          throw new ConnectException("Scale of Decimal value for incrementing column must be 0");
-        }
-        extractedId = decimal.longValue();
-      } else {
-        throw new ConnectException("Invalid type for incrementing column: " + incrementingColumnSchema.type());
+
+      extractedId = getExtractedId(schema, record);
+
+      if (keyColumn != null && !keyColumn.isEmpty()) {
+        extractedKey = getExtractedKey(schema, record);
       }
 
       // If we are only using an incrementing column, then this must be incrementing.
       // If we are also using a timestamp, then we may see updates to older rows.
       Long incrementingOffset = offset.getIncrementingOffset();
-      assert incrementingOffset == -1L || extractedId > incrementingOffset || timestampColumn != null;
+      Long incrementingKey = offset.getIncrementingKey();
+
+      if (extractedKey != null) {
+        assert incrementingOffset == -1L || (extractedId.equals(incrementingOffset) && extractedKey > incrementingKey) ||
+                (!extractedId.equals(incrementingOffset) && extractedId > incrementingOffset) || timestampColumn != null;
+      } else {
+        assert incrementingOffset == -1L || extractedId > incrementingOffset || timestampColumn != null;
+      }
+
     } else {
       extractedId = null;
+      extractedKey = null;
     }
 
-    return new TimestampIncrementingOffset(extractedTimestamp, extractedId);
+    return new TimestampIncrementingOffset(extractedTimestamp, extractedId, extractedKey);
+  }
+
+  private Long getExtractedId(Schema schema, Struct record) {
+    final Schema incrementingColumnSchema = schema.field(incrementingColumn).schema();
+    final Object incrementingColumnValue = record.get(incrementingColumn);
+
+    if (incrementingColumnValue == null) {
+      throw new ConnectException("Null value for incrementing column of type: " + incrementingColumnSchema.type());
+    }
+
+    if (isIntegralPrimitiveType(incrementingColumnValue)) {
+      return ((Number) incrementingColumnValue).longValue();
+    }
+
+    if (incrementingColumnSchema.name() != null && incrementingColumnSchema.name().equals(Decimal.LOGICAL_NAME)) {
+      final BigDecimal decimal = ((BigDecimal) incrementingColumnValue);
+
+      checkDecimal(decimal);
+
+      return decimal.longValue();
+    }
+
+    throw new ConnectException("Invalid type for incrementing column: " + incrementingColumnSchema.type());
+
+  }
+
+  private Long getExtractedKey(Schema schema, Struct record) {
+    final Field incrementingKeyColumnField = schema.field(keyColumn);
+
+    if (incrementingKeyColumnField == null) {
+      return null;
+    }
+
+    final Schema incrementingKeyColumnSchema = incrementingKeyColumnField.schema();
+    final Object incrementingKeyColumnValue = record.get(keyColumn);
+
+    if (incrementingKeyColumnValue == null) {
+      throw new ConnectException("Null value for incrementing key column of type: " + incrementingKeyColumnSchema.type());
+    }
+
+    if (isIntegralPrimitiveType(incrementingKeyColumnValue)) {
+      return ((Number) incrementingKeyColumnValue).longValue();
+    }
+
+    if (incrementingKeyColumnSchema.name() != null && incrementingKeyColumnSchema.name().equals(Decimal.LOGICAL_NAME)) {
+      final BigDecimal decimal = ((BigDecimal) incrementingKeyColumnValue);
+
+      checkDecimal(decimal);
+
+      return decimal.longValue();
+    }
+
+    throw new ConnectException("Invalid type for incrementing column: " + incrementingKeyColumnSchema.type());
+  }
+
+  private void checkDecimal(BigDecimal decimal) {
+    if (decimal.compareTo(LONG_MAX_VALUE_AS_BIGDEC) > 0) {
+      throw new ConnectException("Decimal value for incrementing column exceeded Long.MAX_VALUE");
+    }
+    if (decimal.scale() != 0) {
+      throw new ConnectException("Scale of Decimal value for incrementing column must be 0");
+    }
   }
 
   private boolean isIntegralPrimitiveType(Object incrementingColumnValue) {
@@ -266,6 +351,7 @@ public class TimestampIncrementingTableQuerier extends TableQuerier {
            ", topicPrefix='" + topicPrefix + '\'' +
            ", timestampColumn='" + timestampColumn + '\'' +
            ", incrementingColumn='" + incrementingColumn + '\'' +
+           ", keyColumn='" + keyColumn + '\'' +
            ", offset='" + offset + '\'' +
            '}';
   }

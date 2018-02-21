@@ -96,6 +96,22 @@ public class JdbcUtils {
   }
 
   /**
+   * Check is field exist in table
+   * @param conn database connection
+   * @param table the table to
+   * @param field the field
+   * @return the name of the column that is an autoincrement column, or null if there is no
+   *         autoincrement column or more than one exists
+   * @throws SQLException
+   */
+  public static boolean checkIsFieldExist(Connection conn, String schemaPattern, String table, String field) throws SQLException {
+    try (ResultSet rs = conn.getMetaData().getColumns(null, schemaPattern, table, field)) {
+      return rs.next();
+    }
+  }
+
+
+  /**
    * Look up the autoincrement column for the specified table.
    * @param conn database connection
    * @param table the table to
